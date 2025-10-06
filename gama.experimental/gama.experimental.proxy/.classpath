@@ -16,7 +16,7 @@
 			<attribute name="optional" value="true"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/gama.experimental.MPI/ext/mpi.jar">
+	<classpathentry kind="lib" path="../gama.experimental.MPI/ext/mpi.jar">
 		<attributes>
 			<attribute name="module" value="true"/>
 		</attributes>

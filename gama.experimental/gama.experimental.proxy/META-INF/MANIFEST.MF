@@ -25,4 +25,4 @@ Export-Package: endActionProxy,
  graphPartitionning,
  gridPartitionning
 Bundle-ClassPath: .,
- ext/mpi.jar
+ ../gama.experimental.MPI/ext/mpi.jar

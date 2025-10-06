@@ -78,6 +78,7 @@ public class GridPartitionning {
 	    private int rows;
 	    private int cols;
 	    private Integer[][] clusterGrid;
+	    private Integer[][] scoreGrid; // Add score grid for CAMMISOL
 	    private List<Point> borderCells = new ArrayList<>();
 	    private List<Point> adjCell = new ArrayList<>();
 	    private Map<Point, Set<Integer>> borderCellClusters = new HashMap<>();
@@ -87,8 +88,20 @@ public class GridPartitionning {
 	        this.rows = rows;
 	        this.cols = cols;
 	        this.grid = new Integer[rows][cols];
+	        this.scoreGrid = new Integer[rows][cols]; // Initialize score grid
 	        initializeGrid();
 	    }
+	    
+	    // Inner class for agent cells with scores
+	    private static class AgentCell {
+	        int row, col, score;
+	        AgentCell(int row, int col, int score) {
+	            this.row = row;
+	            this.col = col;
+	            this.score = score;
+	        }
+	    }
+		
 	    private static class Point {
 	        int row, col;
 	        Point(int row, int col) {
@@ -104,6 +117,7 @@ public class GridPartitionning {
 	        for (int i = 0; i < rows; i++) {
 	            for (int j = 0; j < cols; j++) {
 	                grid[i][j] = 0;
+	                scoreGrid[i][j] = 0; // Initialize scores to 0
 	            }
 	        }
 	    }
@@ -130,19 +144,43 @@ public class GridPartitionning {
 	        return sizes;
 	    }
 
-	    private Map<Integer, Integer> getBorderCellsPerCluster() {
-	        Map<Integer, Integer> counts = new HashMap<>();
-	        for (Point p : borderCells) {
-	            Set<Integer> clusters = getBorderCellClusters(p);
-	            for (Integer cluster : clusters) {
-	                counts.merge(cluster, 1, Integer::sum);
-	            }
-	        }
-	        return counts;
-	    }
 	    int getTotalCells()
 	    {
 	        return rows * cols;
+	    }
+	    
+	    // Methods for score management
+	    public void setScore(int row, int col, int score) {
+	        if (row >= 0 && row < rows && col >= 0 && col < cols) {
+	            scoreGrid[row][col] = score;
+	        }
+	    }
+	    
+	    public int getScore(int row, int col) {
+	        if (row >= 0 && row < rows && col >= 0 && col < cols) {
+	            return scoreGrid[row][col];
+	        }
+	        return 0;
+	    }
+	    
+	    public void setScoreGrid(Integer[][] scores) {
+	        if (scores.length == rows && scores[0].length == cols) {
+	            for (int i = 0; i < rows; i++) {
+	                for (int j = 0; j < cols; j++) {
+	                    scoreGrid[i][j] = scores[i][j];
+	                }
+	            }
+	        }
+	    }
+	    
+	    public Integer[][] getScoreGrid() {
+	        Integer[][] copy = new Integer[rows][cols];
+	        for (int i = 0; i < rows; i++) {
+	            for (int j = 0; j < cols; j++) {
+	                copy[i][j] = scoreGrid[i][j];
+	            }
+	        }
+	        return copy;
 	    }
 
 	    public void divideGridToKMEANClusters(int K) {
@@ -388,7 +426,290 @@ public class GridPartitionning {
 	        calculateBorderCells();
 	    }
 
-	    private int getHilbertCurvePosition(int x, int y, int order) {
+    public void divideGridToWeightedClusters(int numClusters, Integer[][] agentMask) {
+        initializeClusters(numClusters);
+        
+        // Set the score grid from the agent mask
+        setScoreGrid(agentMask);
+        
+        // Collect all agent cells with their scores
+        List<AgentCell> agentCells = new ArrayList<>();
+        int totalScore = 0;
+        
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                if (scoreGrid[i][j] > 0) {
+                    AgentCell cell = new AgentCell(i, j, scoreGrid[i][j]);
+                    agentCells.add(cell);
+                    totalScore += scoreGrid[i][j];
+                }
+            }
+        }
+        
+        if (agentCells.isEmpty()) {
+            // If no agent cells, just use regular grid partitioning
+            divideGridToGridClusters(numClusters);
+            return;
+        }
+        
+        // Calculate target score per cluster
+        int baseScorePerCluster = totalScore / numClusters;
+        int remainingScore = totalScore % numClusters;
+        
+        // Create seeds using spatial subdivision for better distribution
+        List<AgentCell> seeds = createWeightedSeeds(agentCells, numClusters);
+        
+        // Initialize cluster assignments for seeds
+        Map<Integer, Integer> clusterScores = new HashMap<>();
+        for (int i = 0; i < numClusters; i++) {
+            clusterScores.put(i, 0);
+        }
+        
+        for (int i = 0; i < seeds.size(); i++) {
+            AgentCell seed = seeds.get(i);
+            clusterGrid[seed.row][seed.col] = i;
+            clusterScores.put(i, clusterScores.get(i) + seed.score);
+        }
+        
+        // Assign remaining agents using score-based load balancing
+        List<AgentCell> unassignedCells = new ArrayList<>();
+        for (AgentCell cell : agentCells) {
+            if (clusterGrid[cell.row][cell.col] == -1) {
+                unassignedCells.add(cell);
+            }
+        }
+        
+        // Sort by score (higher scores first) for better distribution
+        unassignedCells.sort((a, b) -> Integer.compare(b.score, a.score));
+        
+        for (AgentCell cell : unassignedCells) {
+            int bestCluster = findBestClusterForCell(cell, numClusters, clusterScores, 
+                                                   baseScorePerCluster, remainingScore);
+            
+            if (bestCluster != -1) {
+                clusterGrid[cell.row][cell.col] = bestCluster;
+                clusterScores.put(bestCluster, clusterScores.get(bestCluster) + cell.score);
+            }
+        }
+        
+        // Refinement phase to improve spatial coherence for agent cells
+        for (int iteration = 0; iteration < 50; iteration++) {
+            boolean improved = false;
+            Collections.shuffle(agentCells, random);
+            
+            for (AgentCell cell : agentCells) {
+                if (clusterGrid[cell.row][cell.col] == -1) continue;
+                
+                int currentCluster = clusterGrid[cell.row][cell.col];
+                Set<Integer> neighborClusters = getNeighborClusters(cell.row, cell.col);
+                
+                for (int newCluster : neighborClusters) {
+                    if (newCluster == currentCluster) continue;
+                    
+                    double currentCoherence = calculateSpatialCoherence(cell.row, cell.col, currentCluster);
+                    double newCoherence = calculateSpatialCoherence(cell.row, cell.col, newCluster);
+                    
+                    if (newCoherence > currentCoherence + 0.1) {
+                        clusterGrid[cell.row][cell.col] = newCluster;
+                        clusterScores.put(currentCluster, clusterScores.get(currentCluster) - cell.score);
+                        clusterScores.put(newCluster, clusterScores.get(newCluster) + cell.score);
+                        improved = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!improved) break;
+        }
+        
+        // NEW: Assign all remaining cells (score 0) to nearest cluster
+        assignEmptyCellsToNearestCluster();
+        
+        calculateBorderCells();
+    }	    private List<AgentCell> createWeightedSeeds(List<AgentCell> agentCells, int numClusters) {
+	        List<AgentCell> seeds = new ArrayList<>();
+	        
+	        if (numClusters <= agentCells.size()) {
+	            // Use recursive spatial subdivision
+	            List<int[]> regions = new ArrayList<>();
+	            regions.add(new int[]{0, 0, rows, cols}); // [startRow, startCol, endRow, endCol]
+	            
+	            while (regions.size() < numClusters && !regions.isEmpty()) {
+	                List<int[]> newRegions = new ArrayList<>();
+	                for (int[] region : regions) {
+	                    int startRow = region[0], startCol = region[1];
+	                    int endRow = region[2], endCol = region[3];
+	                    int midRow = (startRow + endRow) / 2;
+	                    int midCol = (startCol + endCol) / 2;
+	                    
+	                    if (endRow - startRow > endCol - startCol) {
+	                        newRegions.add(new int[]{startRow, startCol, midRow, endCol});
+	                        newRegions.add(new int[]{midRow, startCol, endRow, endCol});
+	                    } else {
+	                        newRegions.add(new int[]{startRow, startCol, endRow, midCol});
+	                        newRegions.add(new int[]{startRow, midCol, endRow, endCol});
+	                    }
+	                }
+	                regions = newRegions;
+	                if (regions.size() >= numClusters) break;
+	            }
+	            
+	            // Find best agent in each region
+	            for (int i = 0; i < numClusters && i < regions.size(); i++) {
+	                int[] region = regions.get(i);
+	                int centerRow = (region[0] + region[2]) / 2;
+	                int centerCol = (region[1] + region[3]) / 2;
+	                
+	                AgentCell bestAgent = null;
+	                double bestScore = -1;
+	                
+	                for (AgentCell agent : agentCells) {
+	                    if (seeds.contains(agent)) continue;
+	                    
+	                    boolean inRegion = agent.row >= region[0] && agent.row < region[2] && 
+	                                     agent.col >= region[1] && agent.col < region[3];
+	                    double dist = Math.sqrt(Math.pow(agent.row - centerRow, 2) + 
+	                                          Math.pow(agent.col - centerCol, 2));
+	                    
+	                    // Score combines agent score with spatial preference
+	                    double score = agent.score * 2.0 - dist * 0.1;
+	                    if (inRegion) score += 10.0; // Strong preference for agents in region
+	                    
+	                    if (score > bestScore) {
+	                        bestScore = score;
+	                        bestAgent = agent;
+	                    }
+	                }
+	                
+	                if (bestAgent != null) {
+	                    seeds.add(bestAgent);
+	                }
+	            }
+	        }
+	        
+	        return seeds;
+	    }
+	    
+	    private int findBestClusterForCell(AgentCell cell, int numClusters, 
+	                                     Map<Integer, Integer> clusterScores,
+	                                     int baseScorePerCluster, int remainingScore) {
+	        int bestCluster = -1;
+	        double bestScore = Double.MAX_VALUE;
+	        
+	        for (int cluster = 0; cluster < numClusters; cluster++) {
+	            int currentScore = clusterScores.get(cluster);
+	            int targetScore = baseScorePerCluster + (cluster < remainingScore ? 1 : 0);
+	            
+	            if (currentScore >= targetScore + cell.score) continue; // Would overflow
+	            
+	            // Calculate spatial distance to cluster
+	            double minDistToCluster = Double.MAX_VALUE;
+	            for (int i = 0; i < rows; i++) {
+	                for (int j = 0; j < cols; j++) {
+	                    if (clusterGrid[i][j] == cluster) {
+	                        double dist = Math.sqrt(Math.pow(cell.row - i, 2) + Math.pow(cell.col - j, 2));
+	                        minDistToCluster = Math.min(minDistToCluster, dist);
+	                    }
+	                }
+	            }
+	            
+	            // Score combines distance and load balancing
+	            double loadFactor = (double)currentScore / targetScore;
+	            double score = minDistToCluster * (1.0 + loadFactor);
+	            
+	            if (score < bestScore) {
+	                bestScore = score;
+	                bestCluster = cluster;
+	            }
+	        }
+	        
+	        return bestCluster;
+	    }
+	    
+	    private Set<Integer> getNeighborClusters(int i, int j) {
+	        Set<Integer> neighbors = new HashSet<>();
+	        int[][] dirs = {{-1,0}, {1,0}, {0,-1}, {0,1}};
+	        for (int[] dir : dirs) {
+	            int ni = i + dir[0];
+	            int nj = j + dir[1];
+	            if (ni >= 0 && ni < rows && nj >= 0 && nj < cols && 
+	                clusterGrid[ni][nj] >= 0) {
+	                neighbors.add(clusterGrid[ni][nj]);
+	            }
+	        }
+	        return neighbors;
+	    }
+	    
+    private double calculateSpatialCoherence(int i, int j, int targetCluster) {
+        int sameClusterNeighbors = 0;
+        int totalNeighbors = 0;
+        
+        for (int di = -1; di <= 1; di++) {
+            for (int dj = -1; dj <= 1; dj++) {
+                if (di == 0 && dj == 0) continue;
+                
+                int ni = i + di;
+                int nj = j + dj;
+                if (ni >= 0 && ni < rows && nj >= 0 && nj < cols && 
+                    clusterGrid[ni][nj] >= 0) {
+                    totalNeighbors++;
+                    if (clusterGrid[ni][nj] == targetCluster) {
+                        sameClusterNeighbors++;
+                    }
+                }
+            }
+        }
+        
+        return totalNeighbors > 0 ? (double)sameClusterNeighbors / totalNeighbors : 0;
+    }
+    
+    /**
+     * Assigns all empty cells (score = 0) to the nearest cluster containing agent cells
+     */
+    private void assignEmptyCellsToNearestCluster() {
+        // Use a queue for breadth-first search to assign empty cells
+        Queue<Point> queue = new LinkedList<>();
+        
+        // Add all cells that are already assigned to clusters to the queue
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                if (clusterGrid[i][j] != -1) {
+                    queue.offer(new Point(i, j));
+                }
+            }
+        }
+        
+        // BFS to assign unassigned cells to nearest cluster
+        int[][] directions = {{-1,0}, {1,0}, {0,-1}, {0,1}};
+        
+        while (!queue.isEmpty()) {
+            Point current = queue.poll();
+            int currentCluster = clusterGrid[current.row][current.col];
+            
+            // Check all neighbors
+            for (int[] dir : directions) {
+                int newRow = current.row + dir[0];
+                int newCol = current.col + dir[1];
+                
+                if (newRow >= 0 && newRow < rows && newCol >= 0 && newCol < cols 
+                    && clusterGrid[newRow][newCol] == -1) {
+                    
+                    // Assign this cell to the same cluster as current
+                    clusterGrid[newRow][newCol] = currentCluster;
+                    queue.offer(new Point(newRow, newCol));
+                }
+            }
+        }
+        
+        // Fallback: if any cells are still unassigned, assign them to cluster 0
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                if (clusterGrid[i][j] == -1) {
+                    clusterGrid[i][j] = 0;
+                }
+            }
+        }
+    }	    private int getHilbertCurvePosition(int x, int y, int order) {
 	        int position = 0;
 	        for (int i = 0; i < order; i++) {
 	            int xi = (x >> i) & 1;
@@ -418,30 +739,29 @@ public class GridPartitionning {
 	        return row * cols + col;
 	    }
 
-	    public List<List<Integer>> getClusteringAsLists() {
-	        if (clusterGrid == null) {
-	            return new ArrayList<>();
-	        }
+    public List<List<Integer>> getClusteringAsLists() {
+        if (clusterGrid == null) {
+            return new ArrayList<>();
+        }
 
-	        Map<Integer, List<Integer>> clusterMap = new HashMap<>();
-	        
-	        // Go through all cells and group them by cluster
-	        for (int i = 0; i < rows; i++) {
-	            for (int j = 0; j < cols; j++) {
-	                if (grid[i][j] == 0 && clusterGrid[i][j] != -1) {
-	                    int clusterId = clusterGrid[i][j];
-	                    int cellId = getCellId(i, j);
-	                    clusterMap.computeIfAbsent(clusterId, k -> new ArrayList<>()).add(cellId);
-	                }
-	            }
-	        }
-	        System.out.println("clusterMap " + clusterMap);
-	        System.out.println("ArrayList<>(clusterMap.values() " + new ArrayList<>(clusterMap.values()));
-	        // Convert map to list of lists
-	        return new ArrayList<>(clusterMap.values());
-	    }
-
-	    public void divideGridToGridClusters(int numClusters) {
+        Map<Integer, List<Integer>> clusterMap = new HashMap<>();
+        
+        // Include ALL cells in clusters, regardless of their score
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                if (clusterGrid[i][j] != -1) {
+                    int clusterId = clusterGrid[i][j];
+                    int cellId = getCellId(i, j);
+                    clusterMap.computeIfAbsent(clusterId, k -> new ArrayList<>()).add(cellId);
+                }
+            }
+        }
+        
+        System.out.println("clusterMap " + clusterMap);
+        System.out.println("ArrayList<>(clusterMap.values() " + new ArrayList<>(clusterMap.values()));
+        // Convert map to list of lists
+        return new ArrayList<>(clusterMap.values());
+    }	    public void divideGridToGridClusters(int numClusters) {
 	        initializeClusters(0);
 
 	        // Find the best grid dimensions that are close to square
@@ -804,19 +1124,6 @@ public class GridPartitionning {
 	            }
 	        }
 	    }
-	    
-	    private static Integer[][] convertToGrid(ArrayList<ArrayList<Integer>> input) {
-	        int rows = input.size();
-	        int cols = input.get(0).size();
-	        Integer[][] grid = new Integer[rows][cols];
-	        
-	        for (int i = 0; i < rows; i++) {
-	            for (int j = 0; j < cols; j++) {
-	                grid[i][j] = input.get(i).get(j);
-	            }
-	        }
-	        return grid;
-	    }
 	}
 	
 	/**
@@ -1078,7 +1385,56 @@ public class GridPartitionning {
             return new ArrayList<>();
         }
     }
-    
+
+    /**
+     * Helper method to convert ArrayList<Integer> (1D list) to Integer[][] (2D grid)
+     * Assumes the 1D list represents a flattened 2D grid in row-major order
+     */
+    private static Integer[][] convertToGrid(ArrayList<Integer> agentMask, int rows, int cols) {
+        if (agentMask == null || agentMask.isEmpty()) {
+            return new Integer[rows][cols]; // Return empty grid with specified dimensions
+        }
+        
+        Integer[][] grid = new Integer[rows][cols];
+        
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                int index = i * cols + j; // Convert 2D coordinates to 1D index
+                grid[i][j] = (index < agentMask.size()) ? agentMask.get(index) : 0;
+            }
+        }
+        
+        return grid;
+    }
+
+    /**
+     * Grid partitioning technique with scoring system
+     */
+    @SuppressWarnings("rawtypes")
+    @operator(value = "grid_score_partitioning", 
+    		type = IType.LIST, 
+            category = { IOperatorCategory.GRID }, 
+            concept = { IConcept.GRID })
+    @doc(value = "grid partitioning technique with scoring system. The agentMask parameter should be a 1D list representing a flattened 2D grid where 0=no agent, 1=bacteria, 2=nematodes")
+    public static List<List<Integer>> grid_score_partitioning(IScope scope,int rows, int columns, ArrayList<Integer> agentMask, int cluster_number) {
+        if (agentMask == null || agentMask.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        GRID grid = new GRID(rows, columns);
+        random = scope.getRandom().getGenerator();
+        
+        try {
+            // Convert 1D ArrayList to 2D array format for internal processing
+            Integer[][] maskArray = convertToGrid(agentMask, rows, columns);
+            grid.divideGridToWeightedClusters(cluster_number, maskArray);
+            return grid.getClusteringAsLists();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
     /**
      * 
      * Grid partitionning of a grid in cluster_number cluster(s)
