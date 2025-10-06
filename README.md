@@ -46,7 +46,7 @@ To start the CAMMISOL Model for testing purposes , execute the following command
 ```bash
 ./startHeadless cammisol/cammisol.xml # execute the CAMMISOL Model on 1 process 
  ```
-Warning : l.136 (do die;) must be uncommented for centralized execution but commented for distributed execution
+Warning : l.136 (do die;) of cammisol.gaml must be uncommented for centralized execution but commented for distributed execution
 
 ## How to Start the Distribution Models
 
