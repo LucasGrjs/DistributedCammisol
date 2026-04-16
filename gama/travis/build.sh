@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "Compiling gama.annotations"
-cd $( dirname $( realpath "${BASH_SOURCE[0]}" ) )/../gama.annotations
+cd ../gama.annotations
 mvn clean install "$@"
 
 echo "Compiling gama.processor"
