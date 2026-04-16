@@ -19,15 +19,15 @@ Follow these steps to compile the project:
 
 1.  Navigate to the `gama` directory:
     ```bash
-    cd gama
+    cd gama/travis/
     ```
 2.  Run the build script. This process might take some time:
     ```bash
-    ./travis/build.sh
+    ./build.sh
     ```
 3.  Change to the `Cammisol` directory:
     ```bash
-    cd ../Cammisol/models
+    cd ../../Cammisol/models
     ```
 4.  Give execution permissions to the script:
     ```bash
@@ -44,7 +44,7 @@ To start the CAMMISOL Model for testing purposes , execute the following command
 
 
 ```bash
-./startHeadless cammisol/cammisol.xml # execute the CAMMISOL Model on 1 process 
+./startHeadless cammisol/cammisol.xml
  ```
 Warning : l.136 (do die;) of cammisol.gaml must be uncommented for centralized execution but commented for distributed execution
 
