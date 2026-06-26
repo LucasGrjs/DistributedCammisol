@@ -51,7 +51,7 @@ Warning : l.136 (do die;) of cammisol.gaml must be uncommented for centralized e
 ## How to Start the Distribution Models
 
 ```bash
-./startDistributedCammisol cammisol/Distribution_CAMMISOL.xml.xml N # execute CAMMISOL on N process
+./startDistributedCammisol cammisol/Distribution_CAMMISOL.xml N # execute CAMMISOL on N process
 ```
 
 ---
