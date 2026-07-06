@@ -52,7 +52,7 @@ To start the CAMMISOL Model for testing purposes , execute the following command
 ---
 ### Results
 
-All results from these simulations will be located in the `/output.log/` directory after the model execution, it will contain the logs of the simulation from each **Processor**.
+All results from these simulations will be located in the `Cammisol/models/output.log/` directory after the model execution, it will contain the logs of the simulation from each **Processor**.
 
 Since `./Cammisol` is bind-mounted into the container, the `models/` directory (including `.gaml` files and `output.log/`) can be edited/inspected directly from the host without rebuilding the image.
 

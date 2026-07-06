@@ -44,7 +44,7 @@ global
 	init
  	{	
  		write("seed " + seed);
- 		seed <- 33.0;
+ 		seed <- 38.0;
  		 
  		create Communication_Agent_MPI; 					// init of the communication agent
  		MPI_RANK <- Communication_Agent_MPI[0].MPI_RANK;	// get the MPI Rank of this instance
