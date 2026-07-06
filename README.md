@@ -6,34 +6,30 @@ This document outlines the **DistributionModel** project, which contains proof-o
 
 ## Requirements
 
-To set up and run this project, you'll need the following:
+To set up and run this project, you'll only need:
 
-* **Java 17**
-* **mpirun (Open MPI) 4.1.4**: Download from [https://www.open-mpi.org/software/ompi/v4.1/](https://www.open-mpi.org/software/ompi/v4.1/)
-* **Apache Maven 3.8.6**
-* **Java Binding for Open MPI**: Refer to [https://www.open-mpi.org/faq/?category=java](https://www.open-mpi.org/faq/?category=java) for details.
+* **Docker** and **Docker Compose**
 
-## Compiling the Project
+Everything else (Java 17, Maven 3.8.6, Open MPI 4.1.4 with Java bindings, and the compiled GAMA/Cammisol build) is installed and built inside the Docker image, see [Dockerfile](Dockerfile).
 
-Follow these steps to compile the project:
+## Building and Starting the Container
 
-1.  Navigate to the `gama` directory:
+Follow these steps to build the image and start the container:
+
+1.  Build the image (this compiles GAMA and Cammisol, so it might take a while):
     ```bash
-    cd gama/travis/
+    docker compose build
     ```
-2.  Run the build script. This process might take some time:
+2.  Start the container in the background:
     ```bash
-    ./build.sh
+    docker compose up -d
     ```
-3.  Change to the `Cammisol` directory:
+3.  Open a shell inside the running container:
     ```bash
-    cd ../../Cammisol/models
+    docker compose exec app bash
     ```
-4.  Give execution permissions to the script:
-    ```bash
-    chmod +x startHeadless
-    chmod +x startDistributedCammisol
-    ```
+
+All commands below are run from inside that shell, in the `/app/Cammisol` working directory.
 
 ---
 
@@ -46,7 +42,6 @@ To start the CAMMISOL Model for testing purposes , execute the following command
 ```bash
 ./startHeadless cammisol/cammisol.xml
  ```
-Warning : l.136 (do die;) of cammisol.gaml must be uncommented for centralized execution but commented for distributed execution
 
 ## How to Start the Distribution Models
 
@@ -58,4 +53,12 @@ Warning : l.136 (do die;) of cammisol.gaml must be uncommented for centralized e
 ### Results
 
 All results from these simulations will be located in the `/output.log/` directory after the model execution, it will contain the logs of the simulation from each **Processor**.
+
+Since `./Cammisol` is bind-mounted into the container, the `models/` directory (including `.gaml` files and `output.log/`) can be edited/inspected directly from the host without rebuilding the image.
+
+### Stopping the Container
+
+```bash
+docker compose down
+```
 

@@ -133,7 +133,9 @@ global {
  		simulationTerminee <- true;
  		write("simulation_cycle_end REACHED ");
  		write("total_duration " + float(total_duration)/1000 + "s");
-		//do die;
+		if (!distributed_simulation) {
+			do die;
+		}
 	}
 }
 
