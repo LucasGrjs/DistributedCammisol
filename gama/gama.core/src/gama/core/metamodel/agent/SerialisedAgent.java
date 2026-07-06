@@ -38,7 +38,6 @@ import gama.core.util.file.json.Json;
 import gama.core.util.file.json.JsonGamlAgent;
 import gama.core.util.file.json.JsonValue;
 import gama.dev.DEBUG;
-import gama.gaml.descriptions.ModelDescription;
 
 /**
  * The Class SerialisedAgent.
@@ -48,11 +47,6 @@ import gama.gaml.descriptions.ModelDescription;
  */
 public record SerialisedAgent(int index, String species, Map<String, Object> attributes,
 		Map<String, ISerialisedPopulation> innerPopulations, UUID uuid) implements ISerialisedAgent {
-
-	static
-	{
-		DEBUG.ON();
-	}
 
 	/** All the attributes that are not interesting to serialise for regular agents */
 	public static Set<String> NON_SERIALISABLE = Set.of(IKeyword.MEMBERS, IKeyword.AGENTS, /*IKeyword.LOCATION,*/
@@ -245,19 +239,11 @@ public record SerialisedAgent(int index, String species, Map<String, Object> att
 	public void restoreAs(final IScope scope, final IAgent agent) {
 		// Update attributes and micropopulations
 
-		DEBUG.OUT("agent to recreate : " + agent);
-		DEBUG.OUT("agent to recreat class : " + agent.getClass());
-		DEBUG.OUT("agent attributes() : " + attributes());
-		DEBUG.OUT("agent ahshsahsah() : " + uuid);
-		
 		// optional
 		agent.setUUID(uuid.toString()); // set UUID ??
 		agent.setOriginalSimulationID(agent.getOriginalSimulationID()); // !!! set originalRankID
 		// optional
-		
-		DEBUG.OUT("agent agent.getHashcode() : " + agent.getUUID());
-		DEBUG.OUT("agent agent.getOriginalSimulationID() : " + agent.getOriginalSimulationID());
-		
+
 		attributes().forEach((name, v) -> { agent.setDirectVarValue(scope, name, v); });
 		
 		if (agent instanceof IMacroAgent host && innerPopulations != null) {
@@ -288,7 +274,6 @@ public record SerialisedAgent(int index, String species, Map<String, Object> att
 	@Override
 	public JsonValue serializeToJson(final Json json) {
 
-		DEBUG.OUT("serializeToJson of " + json);
 		JsonGamlAgent obj = (JsonGamlAgent) json.agent(species, index).add("attributes", attributes);
 		if (innerPopulations != null && !innerPopulations.isEmpty()) { obj.add("populations", innerPopulations); }
 		return obj;
@@ -305,52 +290,25 @@ public record SerialisedAgent(int index, String species, Map<String, Object> att
 	 */
 	public IAgent recreateIn(final IScope scope) {
 
-		DEBUG.OUT("recreateIn of " + scope);
 		IPopulation<?> p = scope.getSimulation().getPopulationFor(species);
-		DEBUG.OUT("population to recreat into t : " + p);
-		
+
 		if(p == null)
 		{
-			DEBUG.OUT("species to recreate : " + species);
-			DEBUG.OUT("scope.getSimulation()11 : " + scope.getSimulation().getMicroPopulation(species));
-			DEBUG.OUT("scope.getSimulation()222 " + scope.getSimulation().getAgents(scope));
-			
-			DEBUG.OUT("recreateIn null so we look for external pop");
-			final ModelDescription micro = scope.getModel().getDescription();
-			DEBUG.OUT("micro model " + micro);
-			DEBUG.OUT("micro model exp names " + micro.getExperimentNames());
-			DEBUG.OUT("ddd " + micro.getMicroSpecies());
-			
-			SimulationAgent mainSimulationAgent = (SimulationAgent) scope.getSimulation().getPopulation().get(0);
+			// Not a top-level population: look for it among the micro-models' own species
+			// (e.g. a species declared inside an imported/embedded sub-model).
 			for(var auto : scope.getModel().getMicroSpecies())
 			{
-				DEBUG.OUT("current azdaza " + auto.getName());
-				DEBUG.OUT("current pop ccc" + auto.getClass());
-				if(auto instanceof GamlModelSpecies microModel)
+				if(auto instanceof GamlModelSpecies microModel && microModel.getMicroSpeciesNames().contains(species))
 				{
-					DEBUG.OUT("microModel.getMicroSpeciesNames() : " + microModel.getMicroSpeciesNames());
-					
-					if(microModel.getMicroSpeciesNames().contains(species))
-					{
-						p = microModel.getAllSpecies().get(species).getPopulation(scope);
-						DEBUG.OUT("ppoppdkzdoze " + p );
-					}
+					p = microModel.getAllSpecies().get(species).getPopulation(scope);
 				}
 			}
 		}
-		
-		//DEBUG.OUT("size of pop pre : " + p.size());
 
-		//	DEBUG.OUT("agent uuid to recreate : " + this.uuid);
-		
 		if (p == null)
 			throw GamaRuntimeException.error("No population named" + species + " exist in this simulation", scope);
 
-		//DEBUG.OUT("reacreate in this.attributes  : " + this.attributes);
-		//DEBUG.OUT("reacreate in index : " + index);
 		IAgent a = p.getOrCreateAgent(scope, index, this.attributes, this.uuid());
-		//DEBUG.OUT("p.getOrCreateAgent " + a);
-		//DEBUG.OUT("p.getOrCreateAgent new agent index" + a.getIndex());
 		restoreAs(scope, a);
 		return a;
 	}

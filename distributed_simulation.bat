@@ -40,10 +40,6 @@ echo [INFO] Preparation du conteneur...
 echo [INFO] Fichier    : cammisol/%NOM_FICHIER%
 echo [INFO] Processus  : %CORES%
 echo.
-echo [RAPPEL] Execution distribuee : la ligne "do die;" (~l.136 de
-echo          cammisol.gaml) doit etre COMMENTEE, sinon chaque processus
-echo          termine la simulation de son cote (voir README).
-echo.
 
 :: 4. Lancement Docker (demarre le conteneur s'il n'est pas deja la)
 docker-compose up -d

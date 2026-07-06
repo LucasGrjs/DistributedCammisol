@@ -32,16 +32,25 @@ global {
 	float rain_period <- 7#days;
 	
 	int simulation_cycle_end <- 302;
-	
+
+	// Cycles between two periodic saves (see save_charts/save_result below).
+	// Distribution_CAMMISOL.gaml's own sync_period and compare_co2.py's --step
+	// default both assume this same cadence.
+	int results_save_period <- 10;
+
 	bool simulationTerminee <- false;
 	bool distributed_simulation <- false;
-	
+
 	init {
-		
+
+		// Every instance of this model - the centralized run, and each rank's
+		// copy in a distributed run - is forced to the same fixed seed here,
+		// regardless of any seed passed to `create` (e.g. Distribution_CAMMISOL.gaml
+		// deliberately does not pass one: it would be silently overwritten anyway).
+		// This is what lets a distributed run's per-rank nematode/grid state line
+		// up deterministically with the centralized run for comparison.
 		seed <- 10.0;
-		
-		write("distributed_simulation ?? " + distributed_simulation);
-		
+
 		do init_grid;
 		do init_enzymatic_optimisation;
 		do init_enzymes;
@@ -78,39 +87,21 @@ global {
 		ask PoreParticle {
 			ask populations {
 				do update;
-				//write "Initial enzymes optimization for " + self;
 				//do optimize_enzymes(myself.dam, myself.accessible_organics);
 			}
 		}
-		
-		/*int s1 <- length(MineralParticle);
-		int s2 <- length(PoreParticle);
-		int s3 <- (length(OrganicParticle) - length(PoreParticle));
-		
-		write("lenght MineralParticle " + s1);
-		write("lenght PoreParticle " + s2);
-		write("lenght OrganicParticle " + s3);
-		
-		write("lenght TOTAL " + (s1+s2+s3));
-		write("Nematode " + length(Nematode));
-		write("grid_size * grid_size = " + grid_size * grid_size);*/
 	}
 
 	reflex { // main loop of the model
 		ask shuffle(Nematode) {
 			if(scheduled) // execute only the Nematode if they are scheduled
-			{			
-				//write("self " + self);
-				do life;
-			}else
 			{
-				//write("" + self + " is not scheduled");
+				do life;
 			}
 		}
 		ask shuffle(PoreParticle) {
 			if(scheduled)
 			{
-				//write("self " + self);
 				ask populations {
 					if flip(local_step / enzymes_optimization_period) {
 						do update;
@@ -119,9 +110,6 @@ global {
 				}
 				do decompose;
 				do microbe_life;
-			}else
-			{
-				//write("" + self + " is not scheduled");
 			}
 		}
 	}
@@ -133,10 +121,6 @@ global {
 	
 	reflex when: cycle = simulation_cycle_end
 	{
-		
- 		//write("distribution step : --------------------------------------" + cycle);
- 		//write("total_duration " + float(total_duration)/1000 + "s");
- 		//write("duration " + float(duration)/1000 + "s");
  		simulationTerminee <- true;
  		write("simulation_cycle_end REACHED ");
  		write("total_duration " + float(total_duration)/1000 + "s");
@@ -192,7 +176,7 @@ experiment base_cammisol_output {
 	
 	reflex save_charts when: !distributed_simulation
 	{
-		if(cycle mod 10 = 0)
+		if(cycle mod results_save_period = 0)
 		{
 			ask simulation 
 			{	
@@ -214,40 +198,12 @@ experiment base_cammisol_output {
 	 		save "O_c; F_c; M_c" to: "../output.log/results_central/bacteria.csv" format: 'csv' rewrite: true;
 	 		save "nematode_CO2_emissions" to: "../output.log/results_central/CO2.csv" format: 'csv' rewrite: true;
 		}
-		if(cycle mod 10 = 0)
+		if(cycle mod results_save_period = 0)
 		{
-			ask simulation 
+			ask simulation
 			{
-				/*save "" + sum(Dam collect each.dom[0])/#gram +
-	 			";" + sum(Dam collect each.dom[1])/#gram +
-	 			";" + sum(Dam collect each.dom[2])/#gram +
-	 			";" + sum(Dam collect each.dim[0])/#gram + 
-	 			";" + sum(Dam collect each.dim[1])/#gram 
-	 			to: "../output.log/results_central/dam.csv" format: 'csv' rewrite: false;
-	 			
-				save "" + sum(OrganicParticle collect each.C_labile)/#gram + 
-				";" +sum(OrganicParticle collect each.N_labile)/#gram + 
-				";" + sum(OrganicParticle collect each.P_labile)/#gram + 
-				";" + sum(OrganicParticle collect each.C_recalcitrant)/#gram +
-				";" +sum(OrganicParticle collect each.N_recalcitrant)/#gram +
-				";" +sum(OrganicParticle collect each.P_recalcitrant)/#gram 
-				to: "../output.log/results_central/organics.csv" format: 'csv' rewrite: false;
-				
-				
-				let O <- PoreParticle collect each.populations[0].C;
-				let F <- PoreParticle collect each.populations[1].C;
-				let M <- PoreParticle collect each.populations[2].C;
-				
-				write("O " + O);
-				write("F " + F);
-				write("M " + M);
-				
-				save "" + sum(O)/#gram + 
-				";" + sum(F)/#gram + 
-				";" + sum(M)/#gram 
-				to: "../output.log/results_central/bacteria.csv" format: 'csv' rewrite: false;	*/
 	 			save nematode_CO2_emissions  to: "../output.log/results_central/CO2.csv" format: 'csv' rewrite: false;
-			}	
+			}
 		}
 }
 	

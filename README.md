@@ -49,6 +49,16 @@ To start the CAMMISOL Model for testing purposes , execute the following command
 ./startDistributedCammisol cammisol/Distribution_CAMMISOL.xml N # execute CAMMISOL on N process
 ```
 
+### Running Both at Once (Windows)
+
+[run_simulations.bat](run_simulations.bat), at the repo root, runs a centralized simulation followed by a distributed one (6 cores by default, edit the `CORES` variable to change it) inside the container, then compares their CO2 output via [compare_co2.py](Cammisol/models/scripts/compare_co2.py) on the host:
+
+```bat
+run_simulations.bat
+```
+
+It expects `docker compose up -d` to have been run already (or it starts the container itself) and a Python install with `matplotlib` on the host to generate the comparison plot.
+
 ---
 ### Results
 

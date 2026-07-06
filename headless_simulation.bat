@@ -35,10 +35,6 @@ echo.
 echo [INFO] Preparation du conteneur...
 echo [INFO] Fichier : cammisol/%NOM_FICHIER%
 echo.
-echo [RAPPEL] Execution centralisee : la ligne "do die;" (~l.136 de
-echo          cammisol.gaml) doit etre DECOMMENTEE pour que la simulation
-echo          s'arrete d'elle-meme (voir README).
-echo.
 
 :: 3. Lancement Docker (demarre le conteneur s'il n'est pas deja la)
 docker-compose up -d
