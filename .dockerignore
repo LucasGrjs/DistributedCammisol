@@ -1,0 +1,5 @@
+.git
+**/target
+**/.settings
+**/*.log
+Cammisol/output

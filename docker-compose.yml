@@ -1,0 +1,31 @@
+services:
+  app:
+    build: .
+    container_name: distributedcammisol_container
+    volumes:
+      # Only Cammisol is bind-mounted: the .gaml models and output.log/ logs are
+      # meant to be edited/inspected live from the host without rebuilding the
+      # image. gama/ and gama.experimental/ are NOT mounted here: they are
+      # compiled during the image build (mvn/tycho), and overlaying the raw
+      # source over them would wipe out the compiled gama.product used by
+      # Cammisol/models/startHeadless and startDistributedCammisol.
+      - ./Cammisol:/app/Cammisol
+    environment:
+      - JAVA_HOME=/opt/java/jdk-latest
+      - TMPDIR=/tmp
+      - OMPI_MCA_orte_tmpdir_base=/tmp
+    # Le volume ./Cammisol:/app/Cammisol Ã©crase les scripts corrigÃ©s (fin de
+    # ligne LF, +x) qui avaient Ã©tÃ© prÃ©parÃ©s dans l'image par les fichiers
+    # bruts du host (souvent en CRLF sous Windows). On les corrige donc Ã
+    # chaque dÃ©marrage avant d'attendre indÃ©finiment.
+    command: >
+      bash -c "sed -i 's/\r$//' models/startHeadless models/startDistributedCammisol
+      && chmod +x models/startHeadless models/startDistributedCammisol
+      && tail -f /dev/null"
+    working_dir: /app/Cammisol
+    # tini (PID 1) reap les process zombies laissÃ©s par mpirun/java quand une
+    # simulation est arrÃªtÃ©e (Ctrl+C, timeout, etc.)
+    init: true
+    # Indispensable pour garder le conteneur en vie
+    tty: true
+    stdin_open: true
