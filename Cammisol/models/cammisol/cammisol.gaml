@@ -62,10 +62,17 @@ global {
 			}
 		}
 		
-		create Nematode number: nematodes_count
+		create Nematode number: nematodes_count returns: created_nematodes
 		{
-			current_pore <- one_of(PoreParticle); 
+			current_pore <- one_of(PoreParticle);
 			location <- any_location_in(current_pore);
+		}
+		// nematode_id is assigned in creation order so a distributed run's per-rank
+		// instances (created independently but with the same seed) can identify
+		// the "same" nematode across ranks when it needs to migrate.
+		loop i from: 0 to: length(created_nematodes) - 1
+		{
+			created_nematodes[i].nematode_id <- i;
 		}
 		
 		ask PoreParticle {

@@ -22,11 +22,17 @@ global {
 
 species Nematode schedules:[]
 {
+	// Stable identifier (assigned once at creation, see cammisol.gaml) used to
+	// match this same agent's local copy across the independent per-rank model
+	// instances of a distributed run, so its state can be handed over when it
+	// migrates from one rank's cluster to another (see Distribution_CAMMISOL.gaml).
+	int nematode_id <- -1;
+
 	// quantity of C N P
 //	float C <- (470#gram * 10^-6); // TODO: source?
 //	float N <- (470#gram * 10^-6)/C_N;
 //	float P <- (470#gram * 10^-6)/C_P;
-	
+
 	float stomack_C;
 	float stomack_N;
 	float stomack_P;

@@ -11,6 +11,7 @@ import mpi.MPIException;
 import mpi.Op;
 import mpi.Request;
 import mpi.Status;
+import gama.core.common.interfaces.ISerialisationConstants;
 import gama.core.runtime.GAMA;
 import gama.core.runtime.IScope;
 import gama.core.util.GamaListFactory;
@@ -579,7 +580,12 @@ public class MPIFunctions
 	        	if(msg.get(index) != null && msg.get(index).size() != 0)
 	        	{
 	        		String conversion = SerialisationOperators.serialize(scope, msg.get(index));
-	        		final byte[] message = conversion.getBytes();
+	        		// Serialized payloads are gzip-compressed binary data, so they must be turned
+	        		// back into bytes with the same charset used to build the string in the first
+	        		// place (ISO_8859_1, see BinarySerialisation.saveToString/createFromString) -
+	        		// the platform default (getBytes()) is normally UTF-8 and silently corrupts any
+	        		// byte >= 0x80, which is almost guaranteed in compressed data.
+	        		final byte[] message = conversion.getBytes(ISerialisationConstants.STRING_BYTE_ARRAY_CHARSET);
 	        		buffSendSize[index] = message.length;
 	        		serializedMessage.add(message);
 	        	}else
@@ -653,7 +659,9 @@ public class MPIFunctions
 	                DEBUG.OUT("subBufferEnd " + subBufferEnd);
 	    			b1 = Arrays.copyOfRange(bufferReceiveData, subBufferStart, subBufferEnd);
 	    			DEBUG.OUT("b1 copied " + b1.length);
-	    			String byteToString = new String(b1);
+	    			// Same charset as on the send side (see above) so the received bytes are
+	    			// reconstructed exactly rather than corrupted through the default charset.
+	    			String byteToString = new String(b1, ISerialisationConstants.STRING_BYTE_ARRAY_CHARSET);
 	    			DEBUG.OUT("byteToString created " + b1);
 	    			DEBUG.OUT("scope created" + scope);
 	    			Object deserialized = (Object)SerialisationOperators.unserialize(scope, byteToString);

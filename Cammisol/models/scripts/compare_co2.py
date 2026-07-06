@@ -135,19 +135,19 @@ def main():
 
     cycles = [i * args.step for i in range(n)]
     fig, ax1 = plt.subplots(figsize=(10, 6))
-    ax1.plot(cycles, central[:n], marker="o", markersize=3, label="Centralized")
-    ax1.plot(cycles, distributed[:n], marker="s", markersize=3, label="Distributed (sum of ranks)")
+
+    # When the two series coincide exactly, drawing them the same way makes one
+    # invisible under the other. Instead: a thick, translucent solid line for
+    # the centralized run, with the distributed run drawn as a dashed line with
+    # markers on top - the dashes/markers let the line underneath show through.
+    ax1.plot(cycles, central[:n], linestyle="-", linewidth=4, alpha=0.5, color="tab:blue", label="Centralized")
+    ax1.plot(cycles, distributed[:n], linestyle="--", linewidth=1.5, marker="o", markersize=4,
+             color="tab:orange", label="Distributed (sum of ranks)")
     ax1.set_xlabel("Cycle")
     ax1.set_ylabel("Cumulative nematode CO2 emissions (g)")
     ax1.set_title("Centralized vs Distributed CAMMISOL - CO2 emissions")
     ax1.grid(True, linestyle=":", linewidth=0.7, alpha=0.7)
     ax1.legend(loc="upper left")
-
-    ax2 = ax1.twinx()
-    relative = [((distributed[i] - central[i]) / central[i] * 100) if central[i] != 0 else 0.0 for i in range(n)]
-    ax2.plot(cycles, relative, color="gray", linestyle="--", linewidth=1, alpha=0.6, label="Relative diff (%)")
-    ax2.set_ylabel("Relative difference (%)", color="gray")
-    ax2.legend(loc="upper right")
 
     png_path = args.out_dir / "CO2_comparison.png"
     fig.savefig(png_path, dpi=200, bbox_inches="tight")

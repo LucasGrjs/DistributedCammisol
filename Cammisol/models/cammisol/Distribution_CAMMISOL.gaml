@@ -435,11 +435,28 @@ species Partitionning_Agent
 
 species Communication_Agent_MPI skills:[MPI_SKILL]{} // communication agent with MPI Librairy
 
+// Transient carrier used to hand a Nematode's state over to the rank that now
+// owns the cluster it wandered into (see Synchronization_Agent.migrate_nematode).
+// It is only a serializable payload for MPI_ALLTOALL: it never acts on its own
+// and is killed as soon as its fields have been copied onto the receiving
+// rank's local Nematode with the same nematode_id.
+species NematodeMigration
+{
+	int nematode_id;
+	float stomack_C;
+	float stomack_N;
+	float stomack_P;
+	bool awake;
+	int dest_cell_index; // grid cell index (Particle.index) of the pore the nematode moved into
+}
+
 species Synchronization_Agent
 {	
 	map<int,list<OrganicParticle>> organics_to_send; 	// key : MPI RANK; value : list of OrganicParticle agent to send
 	map<int,list<OrganicParticle>> updated_organics;	// key : MPI RANK; value : list of OrganicParticle agent with data
-	
+	map<int,list<NematodeMigration>> migrations_to_send;	// key : MPI RANK; value : list of NematodeMigration payloads to send
+	map<int,list<NematodeMigration>> migrations_received;	// key : MPI RANK; value : list of NematodeMigration payloads received
+
 	action send_my_border_cell
 	{
 		// send my_border_cells
@@ -542,28 +559,91 @@ species Synchronization_Agent
 	{
 		write("migrate_nematode start " + my_nematodes);
 		write("my_pores " + my_pores);
-		map<int, list<Nematode>> nematodes_to_migrate;
+
+		list<Nematode> nematodes_that_left;
+
 		loop nematode over: my_nematodes
 		{
-			write("" + nematode + " index_of_pores[nematode.current_pore.index] " + index_of_pores[nematode.current_pore.index]);
-			
-			if(!(my_pores contains index_of_pores[nematode.current_pore.index])) // nematode moved to a pore that I don't simulate
+			int dest_cell_index <- index_of_pores[nematode.current_pore.index];
+			write("" + nematode + " index_of_pores[nematode.current_pore.index] " + dest_cell_index);
+
+			if(!(my_pores contains dest_cell_index)) // nematode moved to a pore that I don't simulate
 			{
-				write(" ?? ??? ?? ? ? ? ? ?  " + nematode);
-				// migrate the nematode to the right instace
-				int cluster <- cell_to_cluster[nematode.current_pore.index];
-				
-				if(nematodes_to_migrate[cluster] = nil)
+				int dest_cluster <- cell_to_cluster[dest_cell_index]; // cluster id == owning MPI rank
+				write("nematode " + nematode + " leaving my cluster for cluster " + dest_cluster);
+
+				create NematodeMigration with: [
+					nematode_id: nematode.nematode_id,
+					stomack_C: nematode.stomack_C,
+					stomack_N: nematode.stomack_N,
+					stomack_P: nematode.stomack_P,
+					awake: nematode.awake,
+					dest_cell_index: dest_cell_index
+				] returns: created_migration;
+
+				if(migrations_to_send[dest_cluster] = nil)
 				{
-					nematodes_to_migrate[cluster] <- list<Nematode>(nematode);
+					migrations_to_send[dest_cluster] <- list<NematodeMigration>(created_migration[0]);
 				}else
 				{
-					nematodes_to_migrate[cluster] << nematode;
+					migrations_to_send[dest_cluster] << created_migration[0];
+				}
+				nematodes_that_left << nematode;
+			}
+		}
+
+		// I no longer simulate the nematodes that left my cluster: freeze them here
+		// (their state is now carried by the migration payload) until/unless they
+		// wander back into my cluster later, at which point they'll be re-adopted
+		// below just like any other incoming nematode.
+		loop nematode over: nematodes_that_left
+		{
+			remove nematode from: my_nematodes;
+			nematode.scheduled <- false;
+		}
+
+		write("nematodes_to_migrate (sent) " + migrations_to_send);
+
+		ask Communication_Agent_MPI
+		{
+			myself.migrations_received <- MPI_ALLTOALL(myself.migrations_to_send);
+		}
+
+		write("nematodes_to_migrate (received) " + migrations_received);
+
+		// Adopt every nematode that just moved into my cluster: find my own local
+		// copy of that nematode_id (every rank already has one, created at init
+		// with the same seed) and bring it up to date, then start scheduling it.
+		loop incoming_pair over: migrations_received.pairs
+		{
+			loop migration over: incoming_pair.value
+			{
+				ask Thematic.cammisol[0]
+				{
+					Nematode target <- Nematode first_with (each.nematode_id = migration.nematode_id);
+					if(target != nil)
+					{
+						target.current_pore <- Particle[migration.dest_cell_index].particle as PoreParticle;
+						target.location <- any_location_in(target.current_pore);
+						target.stomack_C <- migration.stomack_C;
+						target.stomack_N <- migration.stomack_N;
+						target.stomack_P <- migration.stomack_P;
+						target.awake <- migration.awake;
+						target.scheduled <- true;
+						nematode_to_cell[target] <- migration.dest_cell_index;
+						my_nematodes << target;
+					}
+				}
+				// the payload was only a carrier for the state above, discard it
+				ask migration
+				{
+					do die;
 				}
 			}
 		}
-		
-		write("nematodes_to_migrate " + nematodes_to_migrate);
+
+		migrations_to_send <- nil;
+		migrations_received <- nil;
 	}
 }
 
