@@ -35,19 +35,29 @@ All commands below are run from inside that shell, in the `/app/Cammisol` workin
 
 ## Running the CAMMISOL Model (for testing)
 
-To start the CAMMISOL Model for testing purposes , execute the following command:
+To start the CAMMISOL Model for testing purposes, either:
 
+* **Windows**: run [headless_simulation.bat](headless_simulation.bat) from the repo root. It lists the available XML files in `Cammisol\models\cammisol\`, prompts for the one to run, starts the container if needed, and runs it inside.
+  ```bat
+  headless_simulation.bat
+  ```
 
-
-```bash
-./startHeadless cammisol/cammisol.xml
- ```
+* **Linux/macOS**: use `docker exec` from the host (no need to open a shell first):
+  ```bash
+  docker exec -it distributedcammisol_container bash -c "cd models && ./startHeadless cammisol/cammisol.xml"
+  ```
 
 ## How to Start the Distribution Models
 
-```bash
-./startDistributedCammisol cammisol/Distribution_CAMMISOL.xml N # execute CAMMISOL on N process
-```
+* **Windows**: run [distributed_simulation.bat](distributed_simulation.bat) from the repo root (prompts for the XML file and the number of MPI processes, default 4).
+  ```bat
+  distributed_simulation.bat
+  ```
+
+* **Linux/macOS**:
+  ```bash
+  docker exec -it distributedcammisol_container bash -c "cd models && ./startDistributedCammisol cammisol/Distribution_CAMMISOL.xml N"
+  ```
 
 ### Running Both at Once (Windows)
 
